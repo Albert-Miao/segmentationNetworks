@@ -27,7 +27,7 @@ class miccaiSegPlusClassDataset(Dataset):
 
         self.root_dir = root_dir
         os.listdir(self.root_dir)
-        self.sub_dirs = [d for d in os.listdir(self.root_dir) if os.path.isdir(os.path.join(root_dir, d))
+        self.sub_dirs = [d for d in os.listdir(self.root_dir) if os.path.isdir(os.path.join(root_dir, d))]
         self.image_list = []
         for sub_dir in self.sub_dirs:
             sub_list = os.listdir(os.path.join(root_dir, sub_dir))

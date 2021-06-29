@@ -51,12 +51,15 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
             help='evaluate model on validation set')
 parser.add_argument('--save-dir', dest='save_dir',
             help='The directory used to save the trained models',
-            default='save_temp', type=str)
+            default='seg_save_temp', type=str)
 parser.add_argument('--saveTest', default='False', type=str,
             help='Saves the validation/test images if True')
 
 best_prec1 = np.inf
 use_gpu = torch.cuda.is_available()
+
+def tmp_func(crops):
+    return torch.stack([transforms.ToTensor()(crop) for crop in crops])
 
 def main():
     global args, best_prec1
@@ -78,7 +81,8 @@ def main():
         'train': transforms.Compose([
             transforms.Resize((args.imageSize, args.imageSize), interpolation=Image.NEAREST),
             transforms.TenCrop(args.resizedImageSize),
-            transforms.Lambda(lambda crops: torch.stack([transforms.ToTensor()(crop) for crop in crops])),
+            transforms.Lambda(tmp_func),
+            #transforms.Lambda(lambda crops: torch.stack([transforms.ToTensor()(crop) for crop in crops])),
             #transforms.Lambda(lambda normalized: torch.stack([transforms.Normalize([0.295, 0.204, 0.197], [0.221, 0.188, 0.182])(crop) for crop in normalized]))
             #transforms.RandomResizedCrop(224, interpolation=Image.NEAREST),
             #transforms.RandomHorizontalFlip(),
@@ -93,9 +97,9 @@ def main():
     }
 
     # Data Loading
-    data_dir = '/home/salman/pytorch/segmentationNetworks/datasets/miccaiSegOrgans'
+    data_dir = 'datasets/miccaiSegRefined'
     # json path for class definitions
-    json_path = '/home/salman/pytorch/segmentationNetworks/datasets/miccaiSegOrganClasses.json'
+    json_path = 'datasets/miccaiSegClasses.json'
 
     image_datasets = {x: miccaiSegDataset(os.path.join(data_dir, x), data_transforms[x],
                         json_path) for x in ['train', 'test']}
@@ -156,8 +160,10 @@ def main():
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
 
     if use_gpu:
-        model.cuda()
-        criterion.cuda()
+        # model.cuda()
+        # criterion.cuda()
+        model.to(torch.device('cuda:0'))
+        criterion.to(torch.device('cuda:0'))
 
     # Initialize an evaluation Object
     evaluator = utils.Evaluate(key, use_gpu)
@@ -185,11 +191,12 @@ def main():
         print('Mean F1: {}, Class-wise F1: {}'.format(torch.mean(F1), F1))
         evaluator.reset()
 
-        save_checkpoint({
-            'epoch': epoch + 1,
-            'state_dict': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-        }, filename=os.path.join(args.save_dir, 'checkpoint_{}.tar'.format(epoch)))
+        if epoch % 50 == 0:
+            save_checkpoint({
+                'epoch': epoch + 1,
+                'state_dict': model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+            }, filename=os.path.join(args.save_dir, 'checkpoint_{}.tar'.format(epoch)))
 
 def train(train_loader, model, criterion, optimizer, scheduler, epoch, key):
     '''
@@ -226,13 +233,13 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, key):
         loss.backward()
         optimizer.step()
 
-        scheduler.step(loss.mean().data[0])
+        scheduler.step(loss.mean())
 
         print('[%d/%d][%d/%d] Loss: %.4f'
-              % (epoch, args.epochs-1, i, len(train_loader)-1, loss.mean().data[0]))
+              % (epoch, args.epochs-1, i, len(train_loader)-1, loss.mean()))
 
-        utils.displaySamples(img, seg, gt, use_gpu, key, False, epoch,
-                             i, args.save_dir)
+        # utils.displaySamples(img, seg, gt, use_gpu, key, False, epoch,
+        #                      i, args.save_dir)
 
 def validate(val_loader, model, criterion, epoch, key, evaluator):
     '''
@@ -261,10 +268,10 @@ def validate(val_loader, model, criterion, epoch, key, evaluator):
         loss = model.dice_loss(seg, label)
 
         print('[%d/%d][%d/%d] Loss: %.4f'
-              % (epoch, args.epochs-1, i, len(val_loader)-1, loss.mean().data[0]))
+              % (epoch, args.epochs-1, i, len(val_loader)-1, loss.mean()))
 
-        utils.displaySamples(img, seg, gt, use_gpu, key, args.saveTest, epoch,
-                             i, args.save_dir)
+        # utils.displaySamples(img, seg, gt, use_gpu, key, args.saveTest, epoch,
+        #                      i, args.save_dir)
         evaluator.addBatch(seg, oneHotGT)
 
 def save_checkpoint(state, filename='checkpoint.pth.tar'):

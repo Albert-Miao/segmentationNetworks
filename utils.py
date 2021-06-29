@@ -268,7 +268,7 @@ def generateToolPresenceVector(gt):
 
     # Disentangle the classes to a Python dict
     # We only use the MICCAI classes here since we need to do tool classification
-    json_path = '/home/salman/pytorch/segmentationNetworks/datasets/miccaiClasses.json'
+    json_path = 'datasets/miccaiClasses.json'
     classes_key = json.load(open(json_path))['classes']
     key = disentangleKey(classes_key)
 
